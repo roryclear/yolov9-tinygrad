@@ -538,7 +538,7 @@ if __name__ == '__main__':
   load_state_dict(yolo_infer, state_dict)
   st = time.time()
   pred = yolo_infer(pre_processed_image)
-  pred = pred.numpy()
+  pred = pred.numpy()[0]
   pred = pred[pred[:, 4] >= 0.25]
   print(f'did inference in {int(round(((time.time() - st) * 1000)))}ms')
   #v9 and v3 have same 80 class names for Object Detection
