@@ -19,15 +19,15 @@ open localhost:8080
 
 ## Testing performance
 ```
-python test_jit.py
+PYTHONPATH=. python test_jit.py
 ```
 ### for faster inference use tinygrad's BEAM search:
 ```
-BEAM=2 python test_jit.py
+PYTHONPATH=. BEAM=2 python test_jit.py
 ```
 this will result in a longer initial run time as the searches are performed and cached. For visibility on the process use:
 ```
-BEAM=2 DEBUG=2 python test_jit.py
+PYTHONPATH=. BEAM=2 DEBUG=2 python test_jit.py
 ```
 
 # Speed (M3 Macbook Air)
