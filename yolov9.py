@@ -367,6 +367,7 @@ class YOLOv9():
       self.model[41] = RepNCSPELAN4(1024, 256, 512, n=2)
       self.model[42] = DDetect(a=256, b=512, c=512, d=256, f=[35, 38, 41]) 
   def __call__(self, x):
+    x = self.preprocess(x)
     y = []  # outputs
     for i in range(len(self.model)):
       m = self.model[i]
@@ -375,6 +376,15 @@ class YOLOv9():
       y.append(x)
     
     return postprocess(x[0])
+
+  def preprocess(self, im, imgsz=640, model_stride=32, model_pt=True):
+    same_shapes = all(x.shape == im[0].shape for x in im)
+    auto = same_shapes and model_pt
+    im = [compute_transform(x, new_shape=imgsz, auto=auto, stride=model_stride) for x in im]
+    im = Tensor.stack(*im) if len(im) > 1 else im[0].unsqueeze(0)
+    im = im[..., ::-1].permute(0, 3, 1, 2)  # BGR to RGB, BHWC to BCHW, (n, 3, h, w)
+    im = im / 255.0  # 0 - 255 to 0.0 - 1.0
+    return im
 
 def compute_iou_matrix(boxes):
   x1, y1, x2, y2 = boxes[:, 0], boxes[:, 1], boxes[:, 2], boxes[:, 3]
@@ -428,15 +438,6 @@ def compute_transform(image, new_shape=(640, 640), auto=False, scaleFill=False, 
   left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
   image = cv2.copyMakeBorder(image, top, bottom, left, right, cv2.BORDER_CONSTANT, value=(114, 114, 114))
   return Tensor(image)
-
-def preprocess(im, imgsz=640, model_stride=32, model_pt=True):
-  same_shapes = all(x.shape == im[0].shape for x in im)
-  auto = same_shapes and model_pt
-  im = [compute_transform(x, new_shape=imgsz, auto=auto, stride=model_stride) for x in im]
-  im = Tensor.stack(*im) if len(im) > 1 else im[0].unsqueeze(0)
-  im = im[..., ::-1].permute(0, 3, 1, 2)  # BGR to RGB, BHWC to BCHW, (n, 3, h, w)
-  im = im / 255.0  # 0 - 255 to 0.0 - 1.0
-  return im
 
 def rescale_bounding_boxes(predictions, from_size=None, to_size=None):
     from_w, from_h = from_size
@@ -532,16 +533,15 @@ if __name__ == '__main__':
   if not isinstance(image[0], np.ndarray):
     print('Error in image loading. Check your image file.')
     sys.exit(1)
-  pre_processed_image = preprocess(image)
   yolo_infer = YOLOv9(*SIZES[yolo_variant]) if yolo_variant in SIZES else YOLOv9()
   state_dict = safe_load(fetch(f'https://huggingface.co/roryclear/yolov9/resolve/main/yolov9-{yolo_variant}.safetensors'))
   load_state_dict(yolo_infer, state_dict)
   st = time.time()
-  pred = yolo_infer(pre_processed_image)
+  pred = yolo_infer(image)
   pred = pred.numpy()[0]
   pred = pred[pred[:, 4] >= 0.25]
   print(f'did inference in {int(round(((time.time() - st) * 1000)))}ms')
   #v9 and v3 have same 80 class names for Object Detection
   class_labels = fetch('https://raw.githubusercontent.com/pjreddie/darknet/master/data/coco.names').read_text().split("\n")
-  pred = scale_boxes(pre_processed_image.shape[2:], pred, image[0].shape)
+  pred = scale_boxes([640,640], pred, image[0].shape)
   draw_bounding_boxes_and_save(orig_img_path=image_location, output_img_path=out_path, predictions=pred, class_labels=class_labels)
