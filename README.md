@@ -7,7 +7,7 @@ pip install -r requirements.txt
 
 ## Inference on single image:
 ```
-python yolov9.py {link or path to an image} {model variant}
+python yolov9.py {link to an image} {model variant}
 ```
 
 ## Live WebGPU inference
