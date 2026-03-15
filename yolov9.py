@@ -429,10 +429,10 @@ def compute_transform(image, new_shape=(640, 640), scaleFill=False, scaleup=True
   return Tensor(image)
 
 def preprocess(im, imgsz=640, model_stride=32):
-  im = [compute_transform(x, (imgsz, imgsz), stride=model_stride) for x in im]
-  im = Tensor.stack(*im) if len(im) > 1 else im[0].unsqueeze(0)
-  im = im[..., ::-1].permute(0, 3, 1, 2)  # BGR to RGB, BHWC to BCHW, (n, 3, h, w)
-  im = im / 255.0  # 0 - 255 to 0.0 - 1.0
+  im = compute_transform(im, (imgsz, imgsz), stride=model_stride)
+  im = im.unsqueeze(0)
+  im = im[..., ::-1].permute(0, 3, 1, 2)
+  im = im / 255.0
   return im
 
 def rescale_bounding_boxes(predictions, from_size=None, to_size=None):
