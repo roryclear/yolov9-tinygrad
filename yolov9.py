@@ -412,14 +412,13 @@ def postprocess(output, max_det=300, conf_threshold=0.25, iou_threshold=0.45):
     ret = ret.cat(boxes.unsqueeze(0)) if ret is not None else boxes.unsqueeze(0)
   return ret
 
-def compute_transform(image, new_shape=(640, 640), auto=False, scaleFill=False, scaleup=True, stride=32) -> Tensor:
+def compute_transform(image, new_shape=(640, 640), scaleFill=False, scaleup=True, stride=32) -> Tensor:
   shape = image.shape[:2]  # current shape [height, width]
-  new_shape = (new_shape, new_shape) if isinstance(new_shape, int) else new_shape
   r = min(new_shape[0] / shape[0], new_shape[1] / shape[1])
   r = min(r, 1.0) if not scaleup else r
   new_unpad = (int(round(shape[1] * r)), int(round(shape[0] * r)))
   dw, dh = new_shape[1] - new_unpad[0], new_shape[0] - new_unpad[1]
-  dw, dh = (np.mod(dw, stride), np.mod(dh, stride)) if auto else (0.0, 0.0)
+  dw, dh = (np.mod(dw, stride), np.mod(dh, stride))
   new_unpad = (new_shape[1], new_shape[0]) if scaleFill else new_unpad
   dw /= 2
   dh /= 2
@@ -429,10 +428,8 @@ def compute_transform(image, new_shape=(640, 640), auto=False, scaleFill=False, 
   image = cv2.copyMakeBorder(image, top, bottom, left, right, cv2.BORDER_CONSTANT, value=(114, 114, 114))
   return Tensor(image)
 
-def preprocess(im, imgsz=640, model_stride=32, model_pt=True):
-  same_shapes = all(x.shape == im[0].shape for x in im)
-  auto = same_shapes and model_pt
-  im = [compute_transform(x, new_shape=imgsz, auto=auto, stride=model_stride) for x in im]
+def preprocess(im, imgsz=640, model_stride=32):
+  im = [compute_transform(x, (imgsz, imgsz), stride=model_stride) for x in im]
   im = Tensor.stack(*im) if len(im) > 1 else im[0].unsqueeze(0)
   im = im[..., ::-1].permute(0, 3, 1, 2)  # BGR to RGB, BHWC to BCHW, (n, 3, h, w)
   im = im / 255.0  # 0 - 255 to 0.0 - 1.0
