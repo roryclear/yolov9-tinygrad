@@ -295,8 +295,10 @@ class Silence():
     def __call__(self, x): return x
 
 class YOLOv9():
-  def __init__(self, a=16, b=64, c=96, d=24, e=128, f=256, g=224, h=160, i=48, j=144, k=192, l=80, m=32, n=16, p=3, q=96, r=32, s=64, t=128, u=64, v=64, w=128, size=None):
-    if size is not None:
+  def __init__(self, size="t", res=1280):
+    self.res = res
+    if size != "e":
+      a, b, c, d, e, f, g, h, i, j, k, l, m, n, p, q, r, s, t, u, v, w, size = SIZES[size]
       self.model = Sequential(size=23)
       self.model[0] = Conv(in_channels=3, out_channels=a, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), groups=1, bias=True)
       self.model[1] = Conv(in_channels=a, out_channels=a*2, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1),  groups=1, bias=True)
@@ -366,15 +368,52 @@ class YOLOv9():
       self.model[40] = Concat(f=[-1, 29])
       self.model[41] = RepNCSPELAN4(1024, 256, 512, n=2)
       self.model[42] = DDetect(a=256, b=512, c=512, d=256, f=[35, 38, 41]) 
-  def __call__(self, x):
+    state_dict = safe_load(fetch(f'https://huggingface.co/roryclear/yolov9/resolve/main/yolov9-{size}.safetensors'))
+    load_state_dict(self, state_dict)
+
+  def __call__(self, frame):
+    pre = self.preprocess(frame)
+    x = pre.unsqueeze(0)
+    x = x.permute(0, 3, 1, 2)
+    x = x / 255.0
     y = []  # outputs
     for i in range(len(self.model)):
       m = self.model[i]
       if m.f != -1: x = y[m.f] if isinstance(m.f, int) else [x if j == -1 else y[j] for j in m.f]
       x = m(x)
       y.append(x)
-    
-    return postprocess(x[0])
+    preds = postprocess(x[0])[0]
+    preds = self.scale_boxes(pre.shape[:2], preds, frame.shape)
+    return preds
+  
+  def preprocess(self, image, new_shape=None, auto=True, scaleFill=False, scaleup=True, stride=32) -> Tensor:
+    if new_shape is None: new_shape = self.res
+    shape = image.shape[:2]
+    new_shape = (new_shape, new_shape) if isinstance(new_shape, int) else new_shape
+    r = min(new_shape[0] / shape[0], new_shape[1] / shape[1])
+    r = min(r, 1.0) if not scaleup else r
+    new_unpad = (int(round(shape[1] * r)), int(round(shape[0] * r)))
+    dw, dh = new_shape[1] - new_unpad[0], new_shape[0] - new_unpad[1]
+    dw, dh = (np.mod(dw, stride), np.mod(dh, stride)) if auto else (0.0, 0.0)
+    new_unpad = (new_shape[1], new_shape[0]) if scaleFill else new_unpad
+    dw /= 2
+    dh /= 2
+    image = resize(image, new_unpad)
+    image = image.pad(((int(round(dh - 0.1)),int(round(dh - 0.1))),(int(round(dw - 0.1)),int(round(dw - 0.1))),(0,0)))
+    return image
+
+  def scale_boxes(self, img1_shape, predictions, img0_shape):
+      gain = min(img1_shape[0] / img0_shape[0], img1_shape[1] / img0_shape[1])
+      pad_x = (img1_shape[1] - img0_shape[1] * gain) / 2
+      pad_y = (img1_shape[0] - img0_shape[0] * gain) / 2
+      boxes = predictions[:, :4].contiguous()
+      boxes[:, [0, 2]] -= pad_x
+      boxes[:, [1, 3]] -= pad_y
+      boxes /= gain
+      boxes = clip_boxes(boxes, img0_shape)
+      predictions[:, :4] = boxes
+      return predictions
+
 
 def compute_iou_matrix(boxes):
   x1, y1, x2, y2 = boxes[:, 0], boxes[:, 1], boxes[:, 2], boxes[:, 3]
@@ -429,14 +468,6 @@ def compute_transform(image, new_shape=(640, 640), auto=False, scaleFill=False, 
   image = cv2.copyMakeBorder(image, top, bottom, left, right, cv2.BORDER_CONSTANT, value=(114, 114, 114))
   return Tensor(image)
 
-def preprocess(im, imgsz=640, model_stride=32, model_pt=True):
-  same_shapes = all(x.shape == im[0].shape for x in im)
-  auto = same_shapes and model_pt
-  im = [compute_transform(x, new_shape=imgsz, auto=auto, stride=model_stride) for x in im]
-  im = Tensor.stack(*im) if len(im) > 1 else im[0].unsqueeze(0)
-  im = im[..., ::-1].permute(0, 3, 1, 2)  # BGR to RGB, BHWC to BCHW, (n, 3, h, w)
-  im = im / 255.0  # 0 - 255 to 0.0 - 1.0
-  return im
 
 def rescale_bounding_boxes(predictions, from_size=None, to_size=None):
     from_w, from_h = from_size
@@ -491,21 +522,15 @@ def draw_bounding_boxes_and_save(orig_img_path, output_img_path, predictions, cl
   print(f'saved detections at {output_img_path}')
 
 def clip_boxes(boxes, shape):
-  boxes[..., [0, 2]] = np.clip(boxes[..., [0, 2]], 0, shape[1])  # x1, x2
-  boxes[..., [1, 3]] = np.clip(boxes[..., [1, 3]], 0, shape[0])  # y1, y2
-  return boxes
+    boxes[..., [0, 2]] = boxes[..., [0, 2]].clip(0, shape[1])
+    boxes[..., [1, 3]] = boxes[..., [1, 3]].clip(0, shape[0])
+    return boxes
 
-def scale_boxes(img1_shape, predictions, img0_shape, ratio_pad=None):
-  gain = ratio_pad if ratio_pad else min(img1_shape[0] / img0_shape[0], img1_shape[1] / img0_shape[1])
-  pad = ((img1_shape[1] - img0_shape[1] * gain) / 2, (img1_shape[0] - img0_shape[0] * gain) / 2)
-  for pred in predictions:
-    boxes_np = pred[:4].numpy() if isinstance(pred[:4], Tensor) else pred[:4]
-    boxes_np[..., [0, 2]] -= pad[0]
-    boxes_np[..., [1, 3]] -= pad[1]
-    boxes_np[..., :4] /= gain
-    boxes_np = clip_boxes(boxes_np, img0_shape)
-    pred[:4] = boxes_np
-  return predictions
+def resize(img, new_size):
+  img = img.permute(2,0,1)
+  img = Tensor.interpolate(img, size=(new_size[1], new_size[0]), mode='linear', align_corners=False)
+  img = img.permute(1, 2, 0)
+  return img
 
 SIZES = {"t": [16, 64, 96, 24, 128, 256, 224, 160, 48, 144, 192, 80, 32, 16, 3, 96, 32, 64, 128, 64, 64, 128,"t"],
 "s": [32, 128, 192, 48, 256, 512, 448, 320, 96, 288, 384, 128, 64, 32, 3, 192, 64, 64, 128, 128, 128, 256, "s"],
@@ -527,21 +552,16 @@ if __name__ == '__main__':
   output_folder_path.mkdir(parents=True, exist_ok=True)
   #absolute image path or URL
   image_location = np.frombuffer(fetch(img_path).read_bytes(), np.uint8)
-  image = [cv2.imdecode(image_location, 1)]
+  image = cv2.imdecode(image_location, 1)
+  img_np = np.asarray(image)
+  image = Tensor(img_np)
   out_path = (output_folder_path / f"{Path(img_path).stem}_output{Path(img_path).suffix or '.png'}").as_posix()
-  if not isinstance(image[0], np.ndarray):
-    print('Error in image loading. Check your image file.')
-    sys.exit(1)
-  pre_processed_image = preprocess(image)
-  yolo_infer = YOLOv9(*SIZES[yolo_variant]) if yolo_variant in SIZES else YOLOv9()
-  state_dict = safe_load(fetch(f'https://huggingface.co/roryclear/yolov9/resolve/main/yolov9-{yolo_variant}.safetensors'))
-  load_state_dict(yolo_infer, state_dict)
+  yolo_infer = YOLOv9(yolo_variant) if yolo_variant else YOLOv9()
   st = time.time()
-  pred = yolo_infer(pre_processed_image)
-  pred = pred.numpy()[0]
+  pred = yolo_infer(image)
+  pred = pred.numpy()
   pred = pred[pred[:, 4] >= 0.25]
   print(f'did inference in {int(round(((time.time() - st) * 1000)))}ms')
   #v9 and v3 have same 80 class names for Object Detection
   class_labels = fetch('https://raw.githubusercontent.com/pjreddie/darknet/master/data/coco.names').read_text().split("\n")
-  pred = scale_boxes(pre_processed_image.shape[2:], pred, image[0].shape)
   draw_bounding_boxes_and_save(orig_img_path=image_location, output_img_path=out_path, predictions=pred, class_labels=class_labels)
