@@ -366,7 +366,9 @@ class YOLOv9():
       self.model[40] = Concat(f=[-1, 29])
       self.model[41] = RepNCSPELAN4(1024, 256, 512, n=2)
       self.model[42] = DDetect(a=256, b=512, c=512, d=256, f=[35, 38, 41]) 
-  def __call__(self, x):
+  def __call__(self, image):
+    pre_processed_image = preprocess(image)
+    x = pre_processed_image.unsqueeze(0)
     y = []  # outputs
     for i in range(len(self.model)):
       m = self.model[i]
@@ -374,7 +376,9 @@ class YOLOv9():
       x = m(x)
       y.append(x)
     
-    return postprocess(x[0])
+    pred =  postprocess(x[0])
+    pred = scale_boxes(pre_processed_image.shape[1:], pred, image[0].shape)
+    return pred
 
 def compute_iou_matrix(boxes):
   x1, y1, x2, y2 = boxes[:, 0], boxes[:, 1], boxes[:, 2], boxes[:, 3]
