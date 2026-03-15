@@ -416,14 +416,12 @@ def postprocess(output, max_det=300, conf_threshold=0.25, iou_threshold=0.45):
     ret = ret.cat(boxes.unsqueeze(0)) if ret is not None else boxes.unsqueeze(0)
   return ret
 
-def compute_transform(image, new_shape=(640, 640), scaleFill=False, scaleup=True, stride=32) -> Tensor:
+def compute_transform(image, new_shape, stride=32) -> Tensor:
   shape = image.shape[:2]  # current shape [height, width]
-  r = min(new_shape[0] / shape[0], new_shape[1] / shape[1])
-  r = min(r, 1.0) if not scaleup else r
+  r = min(new_shape / shape[0], new_shape / shape[1])
   new_unpad = (int(round(shape[1] * r)), int(round(shape[0] * r)))
-  dw, dh = new_shape[1] - new_unpad[0], new_shape[0] - new_unpad[1]
+  dw, dh = new_shape - new_unpad[0], new_shape - new_unpad[1]
   dw, dh = (np.mod(dw, stride), np.mod(dh, stride))
-  new_unpad = (new_shape[1], new_shape[0]) if scaleFill else new_unpad
   dw /= 2
   dh /= 2
   image = cv2.resize(image, new_unpad, interpolation=cv2.INTER_LINEAR) if shape[::-1] != new_unpad else image
@@ -432,11 +430,11 @@ def compute_transform(image, new_shape=(640, 640), scaleFill=False, scaleup=True
   image = cv2.copyMakeBorder(image, top, bottom, left, right, cv2.BORDER_CONSTANT, value=(114, 114, 114))
   return Tensor(image)
 
-def preprocess(im, imgsz=640, model_stride=32):
-  im = compute_transform(im, (imgsz, imgsz), stride=model_stride)
-  im = im[..., ::-1].permute(2, 0, 1)
-  im = im / 255.0
-  return im
+def preprocess(image, new_shape=640, stride=32):
+  image = compute_transform(image, new_shape, stride=stride)
+  image = image[..., ::-1].permute(2, 0, 1)
+  image = image / 255.0
+  return image
 
 def rescale_bounding_boxes(predictions, from_size=None, to_size=None):
     from_w, from_h = from_size
