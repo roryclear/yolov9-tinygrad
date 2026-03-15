@@ -376,8 +376,8 @@ class YOLOv9():
       x = m(x)
       y.append(x)
     
-    pred =  postprocess(x[0])
-    pred = scale_boxes(pre_processed_image.shape[1:], pred, image[0].shape)
+    pred = postprocess(x[0])
+    pred = scale_boxes(pre_processed_image.shape[1:], pred, image.shape)
     return pred
 
 def compute_iou_matrix(boxes):
@@ -416,7 +416,8 @@ def postprocess(output, max_det=300, conf_threshold=0.25, iou_threshold=0.45):
     ret = ret.cat(boxes.unsqueeze(0)) if ret is not None else boxes.unsqueeze(0)
   return ret
 
-def compute_transform(image, new_shape, stride=32) -> Tensor:
+
+def preprocess(image, new_shape=640, stride=32):
   shape = image.shape[:2]  # current shape [height, width]
   r = min(new_shape / shape[0], new_shape / shape[1])
   new_unpad = (int(round(shape[1] * r)), int(round(shape[0] * r)))
@@ -424,17 +425,29 @@ def compute_transform(image, new_shape, stride=32) -> Tensor:
   dw, dh = (np.mod(dw, stride), np.mod(dh, stride))
   dw /= 2
   dh /= 2
-  image = cv2.resize(image, new_unpad, interpolation=cv2.INTER_LINEAR) if shape[::-1] != new_unpad else image
+  
+  #image = cv2.resize(image, new_unpad, interpolation=cv2.INTER_LINEAR) if shape[::-1] != new_unpad else image
+  image = Tensor(image)
+  image = resize(image, new_unpad)
+  print("rory new_unpad =",new_shape)
+  #image = image.numpy()
   top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
   left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
-  image = cv2.copyMakeBorder(image, top, bottom, left, right, cv2.BORDER_CONSTANT, value=(114, 114, 114))
-  return Tensor(image)
+  #image = cv2.copyMakeBorder(image, top, bottom, left, right, cv2.BORDER_CONSTANT, value=(114, 114, 114))
+  print(image.shape)
+  image = image.pad(((top, bottom), (left, right), (0, 0)), value=114)
+  
+  #image = Tensor(image)
 
-def preprocess(image, new_shape=640, stride=32):
-  image = compute_transform(image, new_shape, stride=stride)
   image = image[..., ::-1].permute(2, 0, 1)
   image = image / 255.0
   return image
+
+def resize(img, new_size):
+  img = img.permute(2,0,1)
+  img = Tensor.interpolate(img, size=(new_size[1], new_size[0]), mode='linear', align_corners=False)
+  img = img.permute(1, 2, 0)
+  return img
 
 def rescale_bounding_boxes(predictions, from_size=None, to_size=None):
     from_w, from_h = from_size
