@@ -8,12 +8,9 @@ import numpy as np
 from pathlib import Path
 
 if __name__ == '__main__':
-  if len(sys.argv) < 2:
-    print("Error: Image URL or path not provided.")
-    sys.exit(1)
-
   img_path = "https://www.aljazeera.com/wp-content/uploads/2022/10/2022-04-28T192650Z_1186456067_UP1EI4S1I0P14_RTRMADP_3_SOCCER-ENGLAND-MUN-CHE-REPORT.jpg"
-  for yolo_variant in ["t", "s", "m", "c", "e"]:
+  img_path = "https://i.ytimg.com/vi/w0V4SK21UIE/hq720.jpg"
+  for yolo_variant in ["t", "s", "m", "c", "e"][:1]:
     print(f'running inference for YOLO version {yolo_variant}')
 
     output_folder_path = Path('./outputs')
