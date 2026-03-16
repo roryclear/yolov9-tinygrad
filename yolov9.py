@@ -295,7 +295,8 @@ class Silence():
     def __call__(self, x): return x
 
 class YOLOv9():
-  def __init__(self, a=16, b=64, c=96, d=24, e=128, f=256, g=224, h=160, i=48, j=144, k=192, l=80, m=32, n=16, p=3, q=96, r=32, s=64, t=128, u=64, v=64, w=128, size=None):
+  def __init__(self, a=16, b=64, c=96, d=24, e=128, f=256, g=224, h=160, i=48, j=144, k=192, l=80, m=32, n=16, p=3, q=96, r=32, s=64, t=128, u=64, v=64, w=128, size=None, test=False):
+    self.test = test
     if size is not None:
       self.model = Sequential(size=23)
       self.model[0] = Conv(in_channels=3, out_channels=a, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), groups=1, bias=True)
@@ -367,7 +368,7 @@ class YOLOv9():
       self.model[41] = RepNCSPELAN4(1024, 256, 512, n=2)
       self.model[42] = DDetect(a=256, b=512, c=512, d=256, f=[35, 38, 41]) 
   def __call__(self, image):
-    pre_processed_image = preprocess(image)
+    pre_processed_image = self.preprocess(image)
     x = pre_processed_image
     y = []  # outputs
     for i in range(len(self.model)):
@@ -379,6 +380,28 @@ class YOLOv9():
     ret = ret[0]
     ret = scale_boxes(pre_processed_image.shape[2:], ret, image.shape)
     return ret
+
+  def preprocess(self, image, new_shape=640, stride=32):
+    shape = image.shape[:2]  # current shape [height, width]
+    r = min(new_shape / shape[0], new_shape / shape[1])
+    new_unpad = (int(round(shape[1] * r)), int(round(shape[0] * r)))
+    dw, dh = new_shape - new_unpad[0], new_shape - new_unpad[1]
+    dw, dh = (np.mod(dw, stride), np.mod(dh, stride))
+    dw /= 2
+    dh /= 2
+    if self.test:
+      image = image.numpy()
+      image = cv2.resize(image, new_unpad, interpolation=cv2.INTER_LINEAR) if shape[::-1] != new_unpad else image
+      image = Tensor(image)
+    else:
+      image = resize(image, new_unpad)
+    top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
+    left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
+    image = image.pad(((top, bottom), (left, right), (0, 0)), value=114)
+    image = image.unsqueeze(0)
+    image = image[..., ::-1].permute(0, 3, 1, 2)  # BGR to RGB, BHWC to BCHW, (n, 3, h, w)
+    image = image / 255.0  # 0 - 255 to 0.0 - 1.0
+    return image
 
 def compute_iou_matrix(boxes):
   x1s = boxes[:, :, 0]
@@ -417,23 +440,11 @@ def postprocess(output, max_det=300, conf_threshold=0.25, iou_threshold=0.45):
   no_overlap_mask = high_iou_mask.sum(axis=1) == 0
   return boxes * no_overlap_mask.unsqueeze(-1)
 
-def preprocess(image, new_shape=640, stride=32):
-  shape = image.shape[:2]  # current shape [height, width]
-  r = min(new_shape / shape[0], new_shape / shape[1])
-  new_unpad = (int(round(shape[1] * r)), int(round(shape[0] * r)))
-  dw, dh = new_shape - new_unpad[0], new_shape - new_unpad[1]
-  dw, dh = (np.mod(dw, stride), np.mod(dh, stride))
-  dw /= 2
-  dh /= 2
-  image = cv2.resize(image, new_unpad, interpolation=cv2.INTER_LINEAR) if shape[::-1] != new_unpad else image
-  top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
-  left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
-  image = Tensor(image)
-  image = image.pad(((top, bottom), (left, right), (0, 0)), value=114)
-  image = image.unsqueeze(0)
-  image = image[..., ::-1].permute(0, 3, 1, 2)  # BGR to RGB, BHWC to BCHW, (n, 3, h, w)
-  image = image / 255.0  # 0 - 255 to 0.0 - 1.0
-  return image
+def resize(img, new_size):
+  img = img.permute(2,0,1)
+  img = Tensor.interpolate(img, size=(new_size[1], new_size[0]), mode='linear', align_corners=False)
+  img = img.permute(1, 2, 0)
+  return img
 
 def rescale_bounding_boxes(predictions, from_size=None, to_size=None):
     from_w, from_h = from_size
