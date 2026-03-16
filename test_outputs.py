@@ -115,13 +115,3 @@ if __name__ == '__main__':
     exp_sorted = exp[np.argsort(exp[:, 3])]
 
     np.testing.assert_allclose(pred_sorted, exp_sorted, rtol=1e-2)
-
-    '''
-    s = "["
-    for y in pred:
-      s += "["
-      for x in y: s += str(x) + ","
-      s += "],\n"
-    s+="]"
-    print(s)
-    '''
