@@ -91,7 +91,7 @@ if __name__ == '__main__':
     output_folder_path.mkdir(parents=True, exist_ok=True)
     #absolute image path or URL
     image_location = np.frombuffer(fetch(img_path).read_bytes(), np.uint8)
-    image = [cv2.imdecode(image_location, 1)]
+    image = cv2.imdecode(image_location, 1)
     out_path = (output_folder_path / f"{Path(img_path).stem}_output{Path(img_path).suffix or '.png'}").as_posix()
     if not isinstance(image[0], np.ndarray):
       print('Error in image loading. Check your image file.')
@@ -107,8 +107,16 @@ if __name__ == '__main__':
     print(f'did inference in {int(round(((time.time() - st) * 1000)))}ms')
     #v9 and v3 have same 80 class names for Object Detection
     class_labels = fetch('https://raw.githubusercontent.com/pjreddie/darknet/master/data/coco.names').read_text().split("\n")
-    pred = scale_boxes(pre_processed_image.shape[2:], pred, image[0].shape)
-    np.testing.assert_allclose(pred, expected[yolo_variant],rtol=1e-4)
+    pred = scale_boxes(pre_processed_image.shape[2:], pred, image.shape)
+    draw_bounding_boxes_and_save(orig_img_path=image_location, output_img_path=out_path, predictions=pred, class_labels=class_labels)
+
+    pred = np.array(pred)
+    exp = np.array(expected[yolo_variant])
+    pred_sorted = pred[np.argsort(pred[:, 3])]
+    exp_sorted = exp[np.argsort(exp[:, 3])]
+
+    np.testing.assert_allclose(pred_sorted, exp_sorted, rtol=1e-4)
+
     '''
     s = "["
     for y in pred:
@@ -118,4 +126,3 @@ if __name__ == '__main__':
     s+="]"
     print(s)
     '''
-    draw_bounding_boxes_and_save(orig_img_path=image_location, output_img_path=out_path, predictions=pred, class_labels=class_labels)

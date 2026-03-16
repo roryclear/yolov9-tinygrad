@@ -430,10 +430,8 @@ def compute_transform(image, new_shape=(640, 640), auto=False, scaleFill=False, 
   return Tensor(image)
 
 def preprocess(im, imgsz=640, model_stride=32, model_pt=True):
-  same_shapes = all(x.shape == im[0].shape for x in im)
-  auto = same_shapes and model_pt
-  im = [compute_transform(x, new_shape=imgsz, auto=auto, stride=model_stride) for x in im]
-  im = Tensor.stack(*im) if len(im) > 1 else im[0].unsqueeze(0)
+  im = compute_transform(im, new_shape=imgsz, auto=True, stride=model_stride)
+  im = im.unsqueeze(0)
   im = im[..., ::-1].permute(0, 3, 1, 2)  # BGR to RGB, BHWC to BCHW, (n, 3, h, w)
   im = im / 255.0  # 0 - 255 to 0.0 - 1.0
   return im
@@ -512,6 +510,7 @@ SIZES = {"t": [16, 64, 96, 24, 128, 256, 224, 160, 48, 144, 192, 80, 32, 16, 3, 
 "m": [32, 240, 360, 90, 480, 960, 840, 600, 184, 544, 720, 240, 128, 60, 1, 360, 120, 64, 128, 240, 240, 480, "m"],
 "c": [64, 256, 512, 128, 256, 1024, 1024, 1024, 128, 768, 1024, 256, 128, 64, 1, 256, 128, 128, 256, 128, 512, 512, "c"]}
 
+'''
 import sys
 from pathlib import Path
 if __name__ == '__main__':
@@ -545,3 +544,5 @@ if __name__ == '__main__':
   class_labels = fetch('https://raw.githubusercontent.com/pjreddie/darknet/master/data/coco.names').read_text().split("\n")
   pred = scale_boxes(pre_processed_image.shape[2:], pred, image[0].shape)
   draw_bounding_boxes_and_save(orig_img_path=image_location, output_img_path=out_path, predictions=pred, class_labels=class_labels)
+
+'''
