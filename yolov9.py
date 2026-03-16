@@ -295,9 +295,11 @@ class Silence():
     def __call__(self, x): return x
 
 class YOLOv9():
-  def __init__(self, a=16, b=64, c=96, d=24, e=128, f=256, g=224, h=160, i=48, j=144, k=192, l=80, m=32, n=16, p=3, q=96, r=32, s=64, t=128, u=64, v=64, w=128, size=None, test=False):
+  def __init__(self, size="t", res=1280, test=False):
+    self.res = res
     self.test = test
-    if size is not None:
+    if size != "e":
+      a, b, c, d, e, f, g, h, i, j, k, l, m, n, p, q, r, s, t, u, v, w, size = SIZES[size]
       self.model = Sequential(size=23)
       self.model[0] = Conv(in_channels=3, out_channels=a, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), groups=1, bias=True)
       self.model[1] = Conv(in_channels=a, out_channels=a*2, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1),  groups=1, bias=True)
@@ -367,6 +369,9 @@ class YOLOv9():
       self.model[40] = Concat(f=[-1, 29])
       self.model[41] = RepNCSPELAN4(1024, 256, 512, n=2)
       self.model[42] = DDetect(a=256, b=512, c=512, d=256, f=[35, 38, 41]) 
+    state_dict = safe_load(fetch(f'https://huggingface.co/roryclear/yolov9/resolve/main/yolov9-{size}.safetensors'))
+    load_state_dict(self, state_dict)
+
   def __call__(self, image):
     pre_processed_image = self.preprocess(image)
     x = pre_processed_image
@@ -378,7 +383,7 @@ class YOLOv9():
       y.append(x)
     ret = postprocess(x[0])
     ret = ret[0]
-    ret = scale_boxes(pre_processed_image.shape[2:], ret, image.shape)
+    ret = self.scale_boxes(pre_processed_image.shape[2:], ret, image.shape)
     return ret
 
   def preprocess(self, image, new_shape=640, stride=32):
@@ -402,6 +407,23 @@ class YOLOv9():
     image = image[..., ::-1].permute(0, 3, 1, 2)  # BGR to RGB, BHWC to BCHW, (n, 3, h, w)
     image = image / 255.0  # 0 - 255 to 0.0 - 1.0
     return image
+
+  def scale_boxes(self, img1_shape, predictions, img0_shape):
+      gain = min(img1_shape[0] / img0_shape[0], img1_shape[1] / img0_shape[1])
+      pad_x = (img1_shape[1] - img0_shape[1] * gain) / 2
+      pad_y = (img1_shape[0] - img0_shape[0] * gain) / 2
+      boxes = predictions[:, :4].contiguous()
+      boxes[:, [0, 2]] -= pad_x
+      boxes[:, [1, 3]] -= pad_y
+      boxes /= gain
+      boxes = clip_boxes(boxes, img0_shape)
+      predictions[:, :4] = boxes
+      return predictions
+
+def clip_boxes(boxes, shape):
+    boxes[..., [0, 2]] = boxes[..., [0, 2]].clip(0, shape[1])
+    boxes[..., [1, 3]] = boxes[..., [1, 3]].clip(0, shape[0])
+    return boxes
 
 def compute_iou_matrix(boxes):
   x1s = boxes[:, :, 0]
@@ -497,23 +519,6 @@ def draw_bounding_boxes_and_save(orig_img_path, output_img_path, predictions, cl
 
   cv2.imwrite(output_img_path, orig_img)
   print(f'saved detections at {output_img_path}')
-
-def scale_boxes(img1_shape, predictions, img0_shape):
-    gain = min(img1_shape[0] / img0_shape[0], img1_shape[1] / img0_shape[1])
-    pad_x = (img1_shape[1] - img0_shape[1] * gain) / 2
-    pad_y = (img1_shape[0] - img0_shape[0] * gain) / 2
-    boxes = predictions[:, :4].contiguous()
-    boxes[:, [0, 2]] -= pad_x
-    boxes[:, [1, 3]] -= pad_y
-    boxes /= gain
-    boxes = clip_boxes(boxes, img0_shape)
-    predictions[:, :4] = boxes
-    return predictions
-
-def clip_boxes(boxes, shape):
-    boxes[..., [0, 2]] = boxes[..., [0, 2]].clip(0, shape[1])
-    boxes[..., [1, 3]] = boxes[..., [1, 3]].clip(0, shape[0])
-    return boxes
 
 SIZES = {"t": [16, 64, 96, 24, 128, 256, 224, 160, 48, 144, 192, 80, 32, 16, 3, 96, 32, 64, 128, 64, 64, 128,"t"],
 "s": [32, 128, 192, 48, 256, 512, 448, 320, 96, 288, 384, 128, 64, 32, 3, 192, 64, 64, 128, 128, 128, 256, "s"],

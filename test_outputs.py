@@ -1,5 +1,5 @@
 from tinygrad.helpers import fetch
-from yolov9 import YOLOv9, SIZES, load_state_dict, scale_boxes, draw_bounding_boxes_and_save, safe_load
+from yolov9 import YOLOv9, load_state_dict, draw_bounding_boxes_and_save, safe_load
 import time
 import cv2
 import numpy as np
@@ -98,9 +98,7 @@ if __name__ == '__main__':
     if not isinstance(image[0], np.ndarray):
       print('Error in image loading. Check your image file.')
       sys.exit(1)
-    yolo_infer = YOLOv9(*SIZES[yolo_variant], test=True) if yolo_variant in SIZES else YOLOv9()
-    state_dict = safe_load(fetch(f'https://huggingface.co/roryclear/yolov9/resolve/main/yolov9-{yolo_variant}.safetensors'))
-    load_state_dict(yolo_infer, state_dict)
+    yolo_infer = YOLOv9(yolo_variant, test=True)
     st = time.time()
     image = Tensor(image)
     pred = yolo_infer(image)
