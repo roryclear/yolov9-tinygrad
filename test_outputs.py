@@ -98,7 +98,7 @@ if __name__ == '__main__':
     if not isinstance(image[0], np.ndarray):
       print('Error in image loading. Check your image file.')
       sys.exit(1)
-    yolo_infer = YOLOv9(yolo_variant, test=True)
+    yolo_infer = YOLOv9(yolo_variant, res=640, test=True)
     st = time.time()
     image = Tensor(image)
     pred = yolo_infer(image)

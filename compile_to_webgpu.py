@@ -165,6 +165,7 @@ export default {model_name};
 def compile_net(run:TinyJit, special_names:Dict[int,str]) -> Tuple[Dict[str,str],List[Tuple[str,List[str],List[int]]],Dict[str,Tuple[int,DType,int]],Dict[str,Tensor]]:
   functions, bufs, bufs_to_save, statements, bufnum = {}, {}, {}, [], 0
   for ji in run.jit_cache:
+    if not hasattr(ji.prg, 'p'): continue
     fxn: ProgramSpec = ji.prg.p
     functions[fxn.function_name] = fxn.src   # NOTE: this assumes all with the same name are the same
     cargs = []
@@ -215,10 +216,8 @@ def export_model(model, target:str, *inputs, model_name: Optional[str] = "model"
 
 if __name__ == "__main__":
     Device.DEFAULT = "WEBGPU"
-    yolo_infer = YOLOv9(*SIZES["t"])
-    state_dict = safe_load(fetch(f'https://huggingface.co/roryclear/yolov9/resolve/main/yolov9-t.safetensors'))
-    load_state_dict(yolo_infer, state_dict)
-    prg, inp_sizes, out_sizes, state = export_model(yolo_infer, Device.DEFAULT.lower(), Tensor.randn(1,3,640,640), model_name="yolov8")
+    yolo_infer = YOLOv9("t", res=640)
+    prg, inp_sizes, out_sizes, state = export_model(yolo_infer, Device.DEFAULT.lower(), Tensor.randn(640,640,3), model_name="yolov8")
     dirname = Path(__file__).parent
     safe_save(state, (dirname / "net.safetensors").as_posix())
     with open(dirname / f"net.js", "w") as text_file:

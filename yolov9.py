@@ -295,7 +295,7 @@ class Silence():
     def __call__(self, x): return x
 
 class YOLOv9():
-  def __init__(self, size="t", res=1280, test=False):
+  def __init__(self, size="t", res=640, test=False):
     self.res = res
     self.test = test
     if size != "e":
@@ -386,11 +386,11 @@ class YOLOv9():
     ret = self.scale_boxes(pre_processed_image.shape[2:], ret, image.shape)
     return ret
 
-  def preprocess(self, image, new_shape=640, stride=32):
+  def preprocess(self, image, stride=32):
     shape = image.shape[:2]  # current shape [height, width]
-    r = min(new_shape / shape[0], new_shape / shape[1])
+    r = min(self.res / shape[0], self.res / shape[1])
     new_unpad = (int(round(shape[1] * r)), int(round(shape[0] * r)))
-    dw, dh = new_shape - new_unpad[0], new_shape - new_unpad[1]
+    dw, dh = self.res - new_unpad[0], self.res - new_unpad[1]
     dw, dh = (np.mod(dw, stride), np.mod(dh, stride))
     dw /= 2
     dh /= 2
