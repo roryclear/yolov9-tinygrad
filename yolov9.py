@@ -376,9 +376,9 @@ class YOLOv9():
       x = m(x)
       y.append(x)
     ret = postprocess(x[0])
-    ret = ret.numpy()[0]
+    ret = ret[0]
     ret = scale_boxes(pre_processed_image.shape[2:], ret, image.shape)
-    return Tensor(ret)
+    return ret
 
 def compute_iou_matrix(boxes):
   x1s = boxes[:, :, 0]
@@ -487,22 +487,22 @@ def draw_bounding_boxes_and_save(orig_img_path, output_img_path, predictions, cl
   cv2.imwrite(output_img_path, orig_img)
   print(f'saved detections at {output_img_path}')
 
-def clip_boxes(boxes, shape):
-  boxes[..., [0, 2]] = np.clip(boxes[..., [0, 2]], 0, shape[1])  # x1, x2
-  boxes[..., [1, 3]] = np.clip(boxes[..., [1, 3]], 0, shape[0])  # y1, y2
-  return boxes
+def scale_boxes(img1_shape, predictions, img0_shape):
+    gain = min(img1_shape[0] / img0_shape[0], img1_shape[1] / img0_shape[1])
+    pad_x = (img1_shape[1] - img0_shape[1] * gain) / 2
+    pad_y = (img1_shape[0] - img0_shape[0] * gain) / 2
+    boxes = predictions[:, :4].contiguous()
+    boxes[:, [0, 2]] -= pad_x
+    boxes[:, [1, 3]] -= pad_y
+    boxes /= gain
+    boxes = clip_boxes(boxes, img0_shape)
+    predictions[:, :4] = boxes
+    return predictions
 
-def scale_boxes(img1_shape, predictions, img0_shape, ratio_pad=None):
-  gain = ratio_pad if ratio_pad else min(img1_shape[0] / img0_shape[0], img1_shape[1] / img0_shape[1])
-  pad = ((img1_shape[1] - img0_shape[1] * gain) / 2, (img1_shape[0] - img0_shape[0] * gain) / 2)
-  for pred in predictions:
-    boxes_np = pred[:4].numpy() if isinstance(pred[:4], Tensor) else pred[:4]
-    boxes_np[..., [0, 2]] -= pad[0]
-    boxes_np[..., [1, 3]] -= pad[1]
-    boxes_np[..., :4] /= gain
-    boxes_np = clip_boxes(boxes_np, img0_shape)
-    pred[:4] = boxes_np
-  return predictions
+def clip_boxes(boxes, shape):
+    boxes[..., [0, 2]] = boxes[..., [0, 2]].clip(0, shape[1])
+    boxes[..., [1, 3]] = boxes[..., [1, 3]].clip(0, shape[0])
+    return boxes
 
 SIZES = {"t": [16, 64, 96, 24, 128, 256, 224, 160, 48, 144, 192, 80, 32, 16, 3, 96, 32, 64, 128, 64, 64, 128,"t"],
 "s": [32, 128, 192, 48, 256, 512, 448, 320, 96, 288, 384, 128, 64, 32, 3, 192, 64, 64, 128, 128, 128, 256, "s"],
