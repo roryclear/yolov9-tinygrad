@@ -412,29 +412,23 @@ def postprocess(output, max_det=300, conf_threshold=0.25, iou_threshold=0.45):
     ret = ret.cat(boxes.unsqueeze(0)) if ret is not None else boxes.unsqueeze(0)
   return ret
 
-def compute_transform(image, new_shape=(640, 640), auto=False, scaleFill=False, scaleup=True, stride=32) -> Tensor:
+def preprocess(image, new_shape=640, stride=32):
   shape = image.shape[:2]  # current shape [height, width]
-  new_shape = (new_shape, new_shape) if isinstance(new_shape, int) else new_shape
-  r = min(new_shape[0] / shape[0], new_shape[1] / shape[1])
-  r = min(r, 1.0) if not scaleup else r
+  r = min(new_shape / shape[0], new_shape / shape[1])
   new_unpad = (int(round(shape[1] * r)), int(round(shape[0] * r)))
-  dw, dh = new_shape[1] - new_unpad[0], new_shape[0] - new_unpad[1]
-  dw, dh = (np.mod(dw, stride), np.mod(dh, stride)) if auto else (0.0, 0.0)
-  new_unpad = (new_shape[1], new_shape[0]) if scaleFill else new_unpad
+  dw, dh = new_shape - new_unpad[0], new_shape - new_unpad[1]
+  dw, dh = (np.mod(dw, stride), np.mod(dh, stride))
   dw /= 2
   dh /= 2
   image = cv2.resize(image, new_unpad, interpolation=cv2.INTER_LINEAR) if shape[::-1] != new_unpad else image
   top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
   left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
   image = cv2.copyMakeBorder(image, top, bottom, left, right, cv2.BORDER_CONSTANT, value=(114, 114, 114))
-  return Tensor(image)
-
-def preprocess(im, imgsz=640, model_stride=32, model_pt=True):
-  im = compute_transform(im, new_shape=imgsz, auto=True, stride=model_stride)
-  im = im.unsqueeze(0)
-  im = im[..., ::-1].permute(0, 3, 1, 2)  # BGR to RGB, BHWC to BCHW, (n, 3, h, w)
-  im = im / 255.0  # 0 - 255 to 0.0 - 1.0
-  return im
+  image = Tensor(image)
+  image = image.unsqueeze(0)
+  image = image[..., ::-1].permute(0, 3, 1, 2)  # BGR to RGB, BHWC to BCHW, (n, 3, h, w)
+  image = image / 255.0  # 0 - 255 to 0.0 - 1.0
+  return image
 
 def rescale_bounding_boxes(predictions, from_size=None, to_size=None):
     from_w, from_h = from_size
