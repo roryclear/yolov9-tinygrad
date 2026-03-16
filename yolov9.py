@@ -428,8 +428,8 @@ def preprocess(image, new_shape=640, stride=32):
   image = cv2.resize(image, new_unpad, interpolation=cv2.INTER_LINEAR) if shape[::-1] != new_unpad else image
   top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
   left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
-  image = cv2.copyMakeBorder(image, top, bottom, left, right, cv2.BORDER_CONSTANT, value=(114, 114, 114))
   image = Tensor(image)
+  image = image.pad(((top, bottom), (left, right), (0, 0)), value=114)
   image = image.unsqueeze(0)
   image = image[..., ::-1].permute(0, 3, 1, 2)  # BGR to RGB, BHWC to BCHW, (n, 3, h, w)
   image = image / 255.0  # 0 - 255 to 0.0 - 1.0
