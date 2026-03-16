@@ -187,6 +187,7 @@
             const validBoxes = [];
             for (let i = 0; i < boxes.length; i += 6)
                 if (boxes[i + 4] > 0) validBoxes.push([boxes[i], boxes[i + 1], boxes[i + 2], boxes[i + 3], boxes[i + 5]]);
+            console.log(validBoxes.length);
             drawBoxes(offscreenCanvas, validBoxes, targetWidth, targetHeight, offsetX, offsetY);
             requestAnimationFrame(processFrame);
         }
@@ -236,18 +237,18 @@
 
         async function prepareInput(offscreenContext) {
             return new Promise(resolve => {
-                const imgData = offscreenContext.getImageData(0,0,modelInputSize,modelInputSize);
+                const imgData = offscreenContext.getImageData(0, 0, modelInputSize, modelInputSize);
                 const pixels = imgData.data;
-                const red = [], green = [], blue = [];
-
-                for (let index=0; index<pixels.length; index+=4) {
-                    red.push(pixels[index]/255.0);
-                    green.push(pixels[index+1]/255.0);
-                    blue.push(pixels[index+2]/255.0);
+                const input = [];
+                
+                for (let i = 0; i < pixels.length; i += 4) {
+                    input.push(pixels[i + 2]); // blue
+                    input.push(pixels[i + 1]); // green
+                    input.push(pixels[i]);     // red
                 }
-                const input = [...red, ...green, ...blue];
-                resolve(input)
-            })
+                
+                resolve(input);
+            });
         }
 
         const getDevice = async () => {

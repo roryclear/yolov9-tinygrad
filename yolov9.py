@@ -295,8 +295,11 @@ class Silence():
     def __call__(self, x): return x
 
 class YOLOv9():
-  def __init__(self, a=16, b=64, c=96, d=24, e=128, f=256, g=224, h=160, i=48, j=144, k=192, l=80, m=32, n=16, p=3, q=96, r=32, s=64, t=128, u=64, v=64, w=128, size=None):
-    if size is not None:
+  def __init__(self, size="t", res=640, test=False):
+    self.res = res
+    self.test = test
+    if size != "e":
+      a, b, c, d, e, f, g, h, i, j, k, l, m, n, p, q, r, s, t, u, v, w, size = SIZES[size]
       self.model = Sequential(size=23)
       self.model[0] = Conv(in_channels=3, out_channels=a, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), groups=1, bias=True)
       self.model[1] = Conv(in_channels=a, out_channels=a*2, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1),  groups=1, bias=True)
@@ -366,77 +369,104 @@ class YOLOv9():
       self.model[40] = Concat(f=[-1, 29])
       self.model[41] = RepNCSPELAN4(1024, 256, 512, n=2)
       self.model[42] = DDetect(a=256, b=512, c=512, d=256, f=[35, 38, 41]) 
-  def __call__(self, x):
+    state_dict = safe_load(fetch(f'https://huggingface.co/roryclear/yolov9/resolve/main/yolov9-{size}.safetensors'))
+    load_state_dict(self, state_dict)
+
+  def __call__(self, image):
+    pre_processed_image = self.preprocess(image)
+    x = pre_processed_image
     y = []  # outputs
     for i in range(len(self.model)):
       m = self.model[i]
       if m.f != -1: x = y[m.f] if isinstance(m.f, int) else [x if j == -1 else y[j] for j in m.f]
       x = m(x)
       y.append(x)
-    
-    return postprocess(x[0])
+    ret = postprocess(x[0])
+    ret = ret[0]
+    ret = self.scale_boxes(pre_processed_image.shape[2:], ret, image.shape)
+    return ret
+
+  def preprocess(self, image, stride=32):
+    shape = image.shape[:2]  # current shape [height, width]
+    r = min(self.res / shape[0], self.res / shape[1])
+    new_unpad = (int(round(shape[1] * r)), int(round(shape[0] * r)))
+    dw, dh = self.res - new_unpad[0], self.res - new_unpad[1]
+    dw, dh = (np.mod(dw, stride), np.mod(dh, stride))
+    dw /= 2
+    dh /= 2
+    if self.test:
+      image = image.numpy()
+      image = cv2.resize(image, new_unpad, interpolation=cv2.INTER_LINEAR) if shape[::-1] != new_unpad else image
+      image = Tensor(image)
+    else:
+      image = resize(image, new_unpad)
+    top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
+    left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
+    image = image.pad(((top, bottom), (left, right), (0, 0)), value=114)
+    image = image.unsqueeze(0)
+    image = image[..., ::-1].permute(0, 3, 1, 2)  # BGR to RGB, BHWC to BCHW, (n, 3, h, w)
+    image = image / 255.0  # 0 - 255 to 0.0 - 1.0
+    return image
+
+  def scale_boxes(self, img1_shape, predictions, img0_shape):
+      gain = min(img1_shape[0] / img0_shape[0], img1_shape[1] / img0_shape[1])
+      pad_x = (img1_shape[1] - img0_shape[1] * gain) / 2
+      pad_y = (img1_shape[0] - img0_shape[0] * gain) / 2
+      boxes = predictions[:, :4].contiguous()
+      boxes[:, [0, 2]] -= pad_x
+      boxes[:, [1, 3]] -= pad_y
+      boxes /= gain
+      boxes = clip_boxes(boxes, img0_shape)
+      predictions[:, :4] = boxes
+      return predictions
+
+def clip_boxes(boxes, shape):
+    boxes[..., [0, 2]] = boxes[..., [0, 2]].clip(0, shape[1])
+    boxes[..., [1, 3]] = boxes[..., [1, 3]].clip(0, shape[0])
+    return boxes
 
 def compute_iou_matrix(boxes):
-  x1, y1, x2, y2 = boxes[:, 0], boxes[:, 1], boxes[:, 2], boxes[:, 3]
-  areas = (x2 - x1) * (y2 - y1)
-  x1 = Tensor.maximum(x1[:, None], x1[None, :])
-  y1 = Tensor.maximum(y1[:, None], y1[None, :])
-  x2 = Tensor.minimum(x2[:, None], x2[None, :])
-  y2 = Tensor.minimum(y2[:, None], y2[None, :])
+  x1s = boxes[:, :, 0]
+  y1s = boxes[:, :, 1]
+  x2s = boxes[:, :, 2]
+  y2s = boxes[:, :, 3]
+  areas = (x2s - x1s) * (y2s - y1s)
+  x1 = Tensor.maximum(x1s[:, :, None], x1s[:, None, :])
+  y1 = Tensor.maximum(y1s[:, :, None], y1s[:, None, :])
+  x2 = Tensor.minimum(x2s[:, :, None], x2s[:, None, :])
+  y2 = Tensor.minimum(y2s[:, :, None], y2s[:, None, :])
   w = Tensor.maximum(Tensor(0), x2 - x1)
   h = Tensor.maximum(Tensor(0), y2 - y1)
   intersection = w * h
-  union = areas[:, None] + areas[None, :] - intersection
+  union = areas[:, :, None] + areas[:, None, :] - intersection
   return intersection / union
 
 def postprocess(output, max_det=300, conf_threshold=0.25, iou_threshold=0.45):
-  ret = None
-  for i in range(output.shape[0]): #todo, proper batch, not loop
-    xc, yc, w, h, class_scores = output[i][0], output[i][1], output[i][2], output[i][3], output[i][4:]
-    class_ids = Tensor.argmax(class_scores, axis=0)
-    probs = Tensor.max(class_scores, axis=0)
-    probs = Tensor.where(probs >= conf_threshold, probs, 0)
-    x1 = xc - w / 2
-    y1 = yc - h / 2
-    x2 = xc + w / 2
-    y2 = yc + h / 2
-    boxes = Tensor.stack(x1, y1, x2, y2, probs, class_ids, dim=1)
-    order = Tensor.topk(probs, max_det)[1]
-    boxes = boxes[order]
-    iou = compute_iou_matrix(boxes[:, :4])
-    iou = Tensor.triu(iou, diagonal=1)
-    same_class_mask = boxes[:, -1][:, None] == boxes[:, -1][None, :]
-    high_iou_mask = (iou > iou_threshold) & same_class_mask
-    no_overlap_mask = high_iou_mask.sum(axis=0) == 0
-    boxes = boxes * no_overlap_mask.unsqueeze(-1)
-    ret = ret.cat(boxes.unsqueeze(0)) if ret is not None else boxes.unsqueeze(0)
-  return ret
+  xc, yc, w, h, class_scores = output[:, 0], output[:, 1], output[:, 2], output[:, 3], output[:, 4:]
+  x1 = xc - w / 2
+  y1 = yc - h / 2
+  x2 = xc + w / 2
+  y2 = yc + h / 2
+  class_ids = Tensor.argmax(class_scores, axis=1)
+  probs = class_scores.max(axis=1)
+  probs = Tensor.where(probs >= conf_threshold, probs, 0)
+  boxes = Tensor.stack(x1, y1, x2, y2, probs, class_ids, dim=2)
+  order_all = Tensor.topk(probs, max_det)[1]
+  batch_idx = Tensor.arange(order_all.shape[0]).reshape(-1, 1)
+  boxes = boxes[batch_idx, order_all]
+  ious = compute_iou_matrix(boxes[:, :, :4])
+  ious = Tensor.triu(ious, diagonal=1)
+  class_ids = boxes[:, :, -1]
+  same_class_mask = class_ids[:, :, None] == class_ids[:, None, :]
+  high_iou_mask = (ious > iou_threshold) & same_class_mask
+  no_overlap_mask = high_iou_mask.sum(axis=1) == 0
+  return boxes * no_overlap_mask.unsqueeze(-1)
 
-def compute_transform(image, new_shape=(640, 640), auto=False, scaleFill=False, scaleup=True, stride=32) -> Tensor:
-  shape = image.shape[:2]  # current shape [height, width]
-  new_shape = (new_shape, new_shape) if isinstance(new_shape, int) else new_shape
-  r = min(new_shape[0] / shape[0], new_shape[1] / shape[1])
-  r = min(r, 1.0) if not scaleup else r
-  new_unpad = (int(round(shape[1] * r)), int(round(shape[0] * r)))
-  dw, dh = new_shape[1] - new_unpad[0], new_shape[0] - new_unpad[1]
-  dw, dh = (np.mod(dw, stride), np.mod(dh, stride)) if auto else (0.0, 0.0)
-  new_unpad = (new_shape[1], new_shape[0]) if scaleFill else new_unpad
-  dw /= 2
-  dh /= 2
-  image = cv2.resize(image, new_unpad, interpolation=cv2.INTER_LINEAR) if shape[::-1] != new_unpad else image
-  top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
-  left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
-  image = cv2.copyMakeBorder(image, top, bottom, left, right, cv2.BORDER_CONSTANT, value=(114, 114, 114))
-  return Tensor(image)
-
-def preprocess(im, imgsz=640, model_stride=32, model_pt=True):
-  same_shapes = all(x.shape == im[0].shape for x in im)
-  auto = same_shapes and model_pt
-  im = [compute_transform(x, new_shape=imgsz, auto=auto, stride=model_stride) for x in im]
-  im = Tensor.stack(*im) if len(im) > 1 else im[0].unsqueeze(0)
-  im = im[..., ::-1].permute(0, 3, 1, 2)  # BGR to RGB, BHWC to BCHW, (n, 3, h, w)
-  im = im / 255.0  # 0 - 255 to 0.0 - 1.0
-  return im
+def resize(img, new_size):
+  img = img.permute(2,0,1)
+  img = Tensor.interpolate(img, size=(new_size[1], new_size[0]), mode='linear', align_corners=False)
+  img = img.permute(1, 2, 0)
+  return img
 
 def rescale_bounding_boxes(predictions, from_size=None, to_size=None):
     from_w, from_h = from_size
@@ -490,27 +520,11 @@ def draw_bounding_boxes_and_save(orig_img_path, output_img_path, predictions, cl
   cv2.imwrite(output_img_path, orig_img)
   print(f'saved detections at {output_img_path}')
 
-def clip_boxes(boxes, shape):
-  boxes[..., [0, 2]] = np.clip(boxes[..., [0, 2]], 0, shape[1])  # x1, x2
-  boxes[..., [1, 3]] = np.clip(boxes[..., [1, 3]], 0, shape[0])  # y1, y2
-  return boxes
-
-def scale_boxes(img1_shape, predictions, img0_shape, ratio_pad=None):
-  gain = ratio_pad if ratio_pad else min(img1_shape[0] / img0_shape[0], img1_shape[1] / img0_shape[1])
-  pad = ((img1_shape[1] - img0_shape[1] * gain) / 2, (img1_shape[0] - img0_shape[0] * gain) / 2)
-  for pred in predictions:
-    boxes_np = pred[:4].numpy() if isinstance(pred[:4], Tensor) else pred[:4]
-    boxes_np[..., [0, 2]] -= pad[0]
-    boxes_np[..., [1, 3]] -= pad[1]
-    boxes_np[..., :4] /= gain
-    boxes_np = clip_boxes(boxes_np, img0_shape)
-    pred[:4] = boxes_np
-  return predictions
-
 SIZES = {"t": [16, 64, 96, 24, 128, 256, 224, 160, 48, 144, 192, 80, 32, 16, 3, 96, 32, 64, 128, 64, 64, 128,"t"],
 "s": [32, 128, 192, 48, 256, 512, 448, 320, 96, 288, 384, 128, 64, 32, 3, 192, 64, 64, 128, 128, 128, 256, "s"],
 "m": [32, 240, 360, 90, 480, 960, 840, 600, 184, 544, 720, 240, 128, 60, 1, 360, 120, 64, 128, 240, 240, 480, "m"],
 "c": [64, 256, 512, 128, 256, 1024, 1024, 1024, 128, 768, 1024, 256, 128, 64, 1, 256, 128, 128, 256, 128, 512, 512, "c"]}
+
 
 import sys
 from pathlib import Path
@@ -527,21 +541,17 @@ if __name__ == '__main__':
   output_folder_path.mkdir(parents=True, exist_ok=True)
   #absolute image path or URL
   image_location = np.frombuffer(fetch(img_path).read_bytes(), np.uint8)
-  image = [cv2.imdecode(image_location, 1)]
+  image = cv2.imdecode(image_location, 1)
   out_path = (output_folder_path / f"{Path(img_path).stem}_output{Path(img_path).suffix or '.png'}").as_posix()
   if not isinstance(image[0], np.ndarray):
     print('Error in image loading. Check your image file.')
     sys.exit(1)
-  pre_processed_image = preprocess(image)
-  yolo_infer = YOLOv9(*SIZES[yolo_variant]) if yolo_variant in SIZES else YOLOv9()
-  state_dict = safe_load(fetch(f'https://huggingface.co/roryclear/yolov9/resolve/main/yolov9-{yolo_variant}.safetensors'))
-  load_state_dict(yolo_infer, state_dict)
+  yolo_infer = YOLOv9(yolo_variant)
   st = time.time()
-  pred = yolo_infer(pre_processed_image)
-  pred = pred.numpy()[0]
+  pred = yolo_infer(Tensor(image))
+  pred = pred.numpy()
   pred = pred[pred[:, 4] >= 0.25]
   print(f'did inference in {int(round(((time.time() - st) * 1000)))}ms')
-  #v9 and v3 have same 80 class names for Object Detection
   class_labels = fetch('https://raw.githubusercontent.com/pjreddie/darknet/master/data/coco.names').read_text().split("\n")
-  pred = scale_boxes(pre_processed_image.shape[2:], pred, image[0].shape)
   draw_bounding_boxes_and_save(orig_img_path=image_location, output_img_path=out_path, predictions=pred, class_labels=class_labels)
+
