@@ -525,7 +525,7 @@ SIZES = {"t": [16, 64, 96, 24, 128, 256, 224, 160, 48, 144, 192, 80, 32, 16, 3, 
 "m": [32, 240, 360, 90, 480, 960, 840, 600, 184, 544, 720, 240, 128, 60, 1, 360, 120, 64, 128, 240, 240, 480, "m"],
 "c": [64, 256, 512, 128, 256, 1024, 1024, 1024, 128, 768, 1024, 256, 128, 64, 1, 256, 128, 128, 256, 128, 512, 512, "c"]}
 
-'''
+
 import sys
 from pathlib import Path
 if __name__ == '__main__':
@@ -541,23 +541,17 @@ if __name__ == '__main__':
   output_folder_path.mkdir(parents=True, exist_ok=True)
   #absolute image path or URL
   image_location = np.frombuffer(fetch(img_path).read_bytes(), np.uint8)
-  image = [cv2.imdecode(image_location, 1)]
+  image = cv2.imdecode(image_location, 1)
   out_path = (output_folder_path / f"{Path(img_path).stem}_output{Path(img_path).suffix or '.png'}").as_posix()
   if not isinstance(image[0], np.ndarray):
     print('Error in image loading. Check your image file.')
     sys.exit(1)
-  pre_processed_image = preprocess(image)
-  yolo_infer = YOLOv9(*SIZES[yolo_variant]) if yolo_variant in SIZES else YOLOv9()
-  state_dict = safe_load(fetch(f'https://huggingface.co/roryclear/yolov9/resolve/main/yolov9-{yolo_variant}.safetensors'))
-  load_state_dict(yolo_infer, state_dict)
+  yolo_infer = YOLOv9(yolo_variant)
   st = time.time()
-  pred = yolo_infer(pre_processed_image)
-  pred = pred.numpy()[0]
+  pred = yolo_infer(Tensor(image))
+  pred = pred.numpy()
   pred = pred[pred[:, 4] >= 0.25]
   print(f'did inference in {int(round(((time.time() - st) * 1000)))}ms')
-  #v9 and v3 have same 80 class names for Object Detection
   class_labels = fetch('https://raw.githubusercontent.com/pjreddie/darknet/master/data/coco.names').read_text().split("\n")
-  pred = scale_boxes(pre_processed_image.shape[2:], pred, image[0].shape)
   draw_bounding_boxes_and_save(orig_img_path=image_location, output_img_path=out_path, predictions=pred, class_labels=class_labels)
 
-'''
