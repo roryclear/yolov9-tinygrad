@@ -8,6 +8,7 @@ import numpy as np
 from collections import defaultdict
 import time
 from pathlib import Path
+from blazeface import BlazeFace
 
 class Sequential():
     def __init__(self, size=0, list=None):
@@ -371,8 +372,12 @@ class YOLOv9():
       self.model[42] = DDetect(a=256, b=512, c=512, d=256, f=[35, 38, 41]) 
     state_dict = safe_load(fetch(f'https://huggingface.co/roryclear/yolov9/resolve/main/yolov9-{size}.safetensors'))
     load_state_dict(self, state_dict)
+    self.blazeface = BlazeFace()
 
   def __call__(self, image):
+    faces = self.blazeface(image).numpy()
+    faces = faces[faces[:, 4] != 0]
+    print(faces)
     pre_processed_image = self.preprocess(image)
     x = pre_processed_image
     y = []  # outputs
