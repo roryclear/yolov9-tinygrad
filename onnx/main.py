@@ -7,7 +7,6 @@ import gdown
 
 #https://github.com/danielsyahputra/yolov9-onnx
 # python main.py --source assets/sample_image.jpeg --weights yolov9-c.onnx --classes metadata.yaml --image
-# todo weights at https://drive.google.com/drive/folders/1QH5RCF5WOk53SfdzsHTFkXAdzMLbbQeO?usp=sharing
 
 def get_detector(args):
     weights_path = args.weights
