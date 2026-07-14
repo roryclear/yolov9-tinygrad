@@ -7,3 +7,4 @@ protobuf==7.35.1
 pyrootutils==1.0.4
 python-dotenv==1.2.2
 PyYAML==6.0.3
+gdown==6.1.0
