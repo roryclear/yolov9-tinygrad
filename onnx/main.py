@@ -3,9 +3,10 @@ import cv2
 from pathlib import Path
 
 from yolov9 import YOLOv9
+import gdown
 
 #https://github.com/danielsyahputra/yolov9-onnx
-# python main.py --source assets/sample_image.jpeg --weights weights/yolov9-c.onnx --classes weights/metadata.yaml --image
+# python main.py --source assets/sample_image.jpeg --weights yolov9-c.onnx --classes metadata.yaml --image
 # todo weights at https://drive.google.com/drive/folders/1QH5RCF5WOk53SfdzsHTFkXAdzMLbbQeO?usp=sharing
 
 def get_detector(args):
@@ -41,10 +42,11 @@ def inference_on_image(args):
 
     print("[INFO] Inference Image")
     ts = time.perf_counter()
-    for i in range(1000):
+    N = 100
+    for i in range(N):
         print(i)
         detections = detector.detect(image)
-    print("fps =", 1000 / (time.perf_counter() - ts))
+    print("fps =",N / (time.perf_counter() - ts))
     detector.draw_detections(image, detections=detections)
 
     output_path = f"output/{Path(args.source).name}"
@@ -80,6 +82,9 @@ def inference_on_video(args):
     print("[INFO] Finish. Saving result to output/result.avi")
 
 if __name__=="__main__":
+    if not os.path.exists("yolov9-c.onnx"): gdown.download("https://drive.google.com/uc?id=1CGVCyKyx-B33mCB5ks6on9iEPG7Tjbjd", "yolov9-c.onnx")
+    if not os.path.exists("metadata.yaml"): gdown.download("https://drive.google.com/file/d/1aobRvyMTEI3k9T6RsWeCm726FoJnI0IE/view?usp=drive_link", "metadata.yaml")
+
     import argparse
     
     parser = argparse.ArgumentParser(description="Argument for YOLOv9 Inference using ONNXRuntime")
