@@ -1,0 +1,10 @@
+flatbuffers==25.12.19
+numpy==2.4.6
+onnxruntime==1.27.0
+opencv-python-headless==5.0.0.93
+packaging==26.2
+protobuf==7.35.1
+pyrootutils==1.0.4
+python-dotenv==1.2.2
+PyYAML==6.0.3
+gdown==6.1.0
