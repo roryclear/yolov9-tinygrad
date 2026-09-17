@@ -225,7 +225,7 @@ func drawBoxes(_ dets: [[Float]]) {
     let W = view.bounds.width
     let H = view.bounds.height
 
-    let videoAspect = CGFloat(g_rotW) / CGFloat(g_rotH)
+    let videoAspect = CGFloat(srcH) / CGFloat(g_rotH)
     let viewAspect = W / H
 
     let videoW: CGFloat
@@ -248,9 +248,9 @@ func drawBoxes(_ dets: [[Float]]) {
     let font = UIFont.boldSystemFont(ofSize: 11)
 
     for d in dets {
-        let x1 = videoX + ((CGFloat(d[0]) - g_ox) / g_scale / CGFloat(g_rotW)) * videoW
+        let x1 = videoX + ((CGFloat(d[0]) - g_ox) / g_scale / CGFloat(srcH)) * videoW
         let y1 = videoY + ((CGFloat(d[1]) - g_oy) / g_scale / CGFloat(g_rotH)) * videoH
-        let x2 = videoX + ((CGFloat(d[2]) - g_ox) / g_scale / CGFloat(g_rotW)) * videoW
+        let x2 = videoX + ((CGFloat(d[2]) - g_ox) / g_scale / CGFloat(srcH)) * videoW
         let y2 = videoY + ((CGFloat(d[3]) - g_oy) / g_scale / CGFloat(g_rotH)) * videoH
 
         let rect = CGRect(x: min(x1, x2), y: min(y1, y2),
@@ -451,7 +451,7 @@ class GraphRunner {
 }
 
 let ciContext = CIContext()
-var g_rotW = 0
+var srcH = 0
 var g_rotH = 0
 var g_scale: CGFloat = 1
 var g_ox: CGFloat = 0
@@ -465,7 +465,6 @@ func copyFrameToYoloBuffer(_ pixelBuffer: CVPixelBuffer) {
     let dstSize = S * S * 3
     let dst = dstBuffer.contents().bindMemory(to: UInt8.self, capacity: dstSize)
 
-    memset(dst, 0, dstSize)
 
     CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
     defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
@@ -474,7 +473,7 @@ func copyFrameToYoloBuffer(_ pixelBuffer: CVPixelBuffer) {
     let src = srcBase.assumingMemoryBound(to: UInt8.self)
     let srcRowBytes = CVPixelBufferGetBytesPerRow(pixelBuffer)
     let srcW = CVPixelBufferGetWidth(pixelBuffer)
-    let srcH = CVPixelBufferGetHeight(pixelBuffer)
+    srcH = CVPixelBufferGetHeight(pixelBuffer)
 
     let scale = CGFloat(S) / CGFloat(max(srcH, srcW))
     let newW = Int((CGFloat(srcH) * scale).rounded())
@@ -482,7 +481,6 @@ func copyFrameToYoloBuffer(_ pixelBuffer: CVPixelBuffer) {
     let ox = (S - newW) / 2
     let oy = (S - newH) / 2
 
-    g_rotW = srcH
     g_rotH = srcW
     g_scale = scale
     g_ox = CGFloat(ox)
