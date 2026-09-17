@@ -85,12 +85,41 @@ let yoloClasses: [(name: String, color: UIColor)] = [
     ("toothbrush", UIColor(red: 0.4, green: 0.7, blue: 0.6, alpha: 1.0))
 ]
 
+var fpsLabel: UILabel?
+var lastFrameTime: CFTimeInterval = 0
+var frameCount = 0
+
 let device = MTLCreateSystemDefaultDevice()!
 let queue = device.makeCommandQueue()!
 var buffers: [Int: MTLBuffer] = [:]
 var buffer_sz: [Int: Int] = [:]
 var programs: [String: MTLComputePipelineState] = [:]
 var yolo_graph: GraphRunner!
+
+func setupFPSLabel(_ view: UIView) {
+    let label = UILabel(frame: CGRect(x: 10, y: 60, width: 120, height: 28))
+    label.backgroundColor = UIColor(white: 0, alpha: 0.5)
+    label.textColor = .white
+    label.font = .boldSystemFont(ofSize: 16)
+    label.text = "FPS: 0"
+    view.addSubview(label)
+    fpsLabel = label
+}
+
+func updateFPS() {
+    let now = CACurrentMediaTime()
+    if lastFrameTime > 0 {
+        frameCount += 1
+        let dt = now - lastFrameTime
+        if dt >= 1.0 {
+            fpsLabel?.text = String(format: "FPS: %.1f", Double(frameCount) / dt)
+            frameCount = 0
+            lastFrameTime = now
+        }
+    } else {
+        lastFrameTime = now
+    }
+}
 
 struct ContentView: View {
     @State private var camera = Camera()
@@ -154,7 +183,7 @@ final class Camera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
         let rows = buffer_sz[out]! / 6
         let dets = buffers[out]!.contents().bindMemory(to: Float.self, capacity: buffer_sz[out]!)
         let shaped = (0..<rows).map { Array(UnsafeBufferPointer(start: dets + $0*6, count: 6)) }.filter { $0[4] >= 0.25 }
-        print("outputs =",shaped.count, shaped)
+        DispatchQueue.main.async { updateFPS() }
         DispatchQueue.main.async { drawBoxes(shaped) }
     }
 }
@@ -174,6 +203,7 @@ struct CameraPreview: UIViewRepresentable {
         view.previewLayer.session = session
         view.previewLayer.videoGravity = .resizeAspect
         previewUIView = view
+        setupFPSLabel(view)
         return view
     }
 
@@ -185,9 +215,7 @@ func clearBoxes() {
     for sub in view.layer.sublayers ?? [] where sub.name == "rect" {
         sub.removeFromSuperlayer()
     }
-    for sub in view.subviews where sub is UILabel {
-        sub.removeFromSuperview()
-    }
+    for sub in view.subviews where sub is UILabel && sub !== fpsLabel { sub.removeFromSuperview() }
 }
 
 func drawBoxes(_ dets: [[Float]]) {
