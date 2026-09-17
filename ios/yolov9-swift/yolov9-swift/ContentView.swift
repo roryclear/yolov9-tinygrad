@@ -1,5 +1,6 @@
 import SwiftUI
 import AVFoundation
+import CoreImage
 
 let device = MTLCreateSystemDefaultDevice()!
 let queue = device.makeCommandQueue()!
@@ -58,33 +59,105 @@ final class Camera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     }
 
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        // frames arrive here
-        print(yolo_graph.copyins)
-        print(yolo_graph.copyouts)
-        print(buffer_sz[yolo_graph.copyouts[0]])
+
+        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        
+        // Copy frame into the last copyin buffer of the graph
+        copyFrameToYoloBuffer(pixelBuffer)
+        
         yolo_graph.run() // test
         
         let out = yolo_graph.copyouts[0]
         let rows = buffer_sz[out]! / 6
         let dets = buffers[out]!.contents().bindMemory(to: Float.self, capacity: buffer_sz[out]!)
-        let shaped = (0..<rows).map { Array(UnsafeBufferPointer(start: dets + $0*6, count: 6)) }.filter { $0[4] >= 0.25 } // 25% hardcoded!
-        print(shaped)
+        let shaped = (0..<rows).map { Array(UnsafeBufferPointer(start: dets + $0*6, count: 6)) }.filter { $0[4] >= 0.25 }
+        print("outputs =",shaped.count, shaped)
+        DispatchQueue.main.async { drawBoxes(shaped) }
     }
 }
+
+final class PreviewView: UIView {
+    override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
+    var previewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
+}
+
+var previewUIView: UIView?
 
 struct CameraPreview: UIViewRepresentable {
     let session: AVCaptureSession
 
     func makeUIView(context: Context) -> UIView {
-        let view = UIView()
-        let layer = AVCaptureVideoPreviewLayer(session: session)
-        layer.videoGravity = .resizeAspect
-        layer.frame = UIScreen.main.bounds
-        view.layer.addSublayer(layer)
+        let view = PreviewView()
+        view.previewLayer.session = session
+        view.previewLayer.videoGravity = .resizeAspect
+        previewUIView = view
         return view
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {}
+}
+
+func clearBoxes() {
+    guard let view = previewUIView else { return }
+    for sub in view.layer.sublayers ?? [] where sub.name == "rect" {
+        sub.removeFromSuperlayer()
+    }
+    for sub in view.subviews where sub is UILabel {
+        sub.removeFromSuperview()
+    }
+}
+
+func drawBoxes(_ dets: [[Float]]) {
+    guard let view = previewUIView else { return }
+    clearBoxes()
+
+    let W = view.bounds.width
+    let H = view.bounds.height
+
+    let videoAspect = CGFloat(g_rotW) / CGFloat(g_rotH)
+    let viewAspect = W / H
+
+    let videoW: CGFloat
+    let videoH: CGFloat
+    let videoX: CGFloat
+    let videoY: CGFloat
+
+    if viewAspect > videoAspect {
+        videoH = H
+        videoW = H * videoAspect
+        videoX = (W - videoW) / 2
+        videoY = 0
+    } else {
+        videoW = W
+        videoH = W / videoAspect
+        videoX = 0
+        videoY = (H - videoH) / 2
+    }
+
+    for d in dets {
+        let x1 = videoX + ((CGFloat(d[0]) - g_ox) / g_scale / CGFloat(g_rotW)) * videoW
+        let y1 = videoY + ((CGFloat(d[1]) - g_oy) / g_scale / CGFloat(g_rotH)) * videoH
+        let x2 = videoX + ((CGFloat(d[2]) - g_ox) / g_scale / CGFloat(g_rotW)) * videoW
+        let y2 = videoY + ((CGFloat(d[3]) - g_oy) / g_scale / CGFloat(g_rotH)) * videoH
+
+        let rect = CGRect(x: min(x1, x2), y: min(y1, y2),
+                          width: abs(x2 - x1), height: abs(y2 - y1))
+
+        let shape = CAShapeLayer()
+        shape.name = "rect"
+        shape.path = UIBezierPath(rect: rect).cgPath
+        shape.strokeColor = UIColor.green.cgColor
+        shape.fillColor = UIColor.clear.cgColor
+        shape.lineWidth = 2
+        view.layer.addSublayer(shape)
+
+        let label = UILabel(frame: CGRect(x: rect.minX, y: max(rect.minY - 16, 0), width: 90, height: 16))
+        label.text = "\(Int(d[5])): \(Int((d[4] * 100).rounded()))%"
+        label.font = .boldSystemFont(ofSize: 12)
+        label.textColor = .white
+        label.backgroundColor = .green
+        view.addSubview(label)
+    }
 }
 
 class GraphRunner {
@@ -108,33 +181,19 @@ class GraphRunner {
                 print("Failed reading file:", filename)
                 return
             }
-            // Format written by the Python side:
-            //   [u32 little-endian meta length][meta JSON][blobs...]
-            guard fileData.count >= 4 else {
-                print("File too short:", fileData.count)
-                return
-            }
             let metaLen: UInt32 = fileData.withUnsafeBytes { $0.load(as: UInt32.self) }
             let metaEnd = 4 + Int(metaLen)
-            guard metaEnd <= fileData.count else {
-                print("Invalid meta length:", metaLen, "file size:", fileData.count)
-                return
-            }
             let metaData = fileData.subdata(in: 4..<metaEnd)
 
-            guard let json = try? JSONSerialization.jsonObject(with: metaData, options: []),
-                  let items = json as? [Any] else {
-                print("Invalid JSON format")
-                return
-            }
+            let json = try? JSONSerialization.jsonObject(with: metaData, options: [])
+            let items = json as? [Any]
 
-            for item in items {
+            for item in items! {
                 autoreleasepool {
                     guard let dict = item as? [String: Any],
                           let key = dict.keys.first else {
                         return
                     }
-                    print("rory key =",key)
 
                     if key == "buff_alloc" {
                         if let info = dict["buff_alloc"] as? [String: Any],
@@ -154,7 +213,6 @@ class GraphRunner {
                             let start = metaEnd + off
                             let end   = start + len
                             guard end <= fileData.count else {
-                                print("copyin out of range", dest, off, len)
                                 return
                             }
                             let blob = fileData.subdata(in: start..<end)
@@ -210,9 +268,7 @@ class GraphRunner {
             let commandBuffer = queue.makeCommandBuffer()!
             for (index, item) in self.calls.enumerated() {
                 let encoder = commandBuffer.makeComputeCommandEncoder()!
-                print(index, "of", self.calls.count)
                 let name = item["name"] as! String
-                print(name)
                 let pipeline = programs[name]!
                 
                 encoder.setComputePipelineState(pipeline)
@@ -227,7 +283,7 @@ class GraphRunner {
                 }
                 
                 for i in 0..<vals.count{
-                    var value = Int32(vals_dict![vals[i]]!)
+                    var value = vals[i]
                     encoder.setBytes(&value, length: 4, index: i+bufferIDs.count)
                 }
                 
@@ -255,6 +311,74 @@ class GraphRunner {
             }
             commandBuffer.commit()
             commandBuffer.waitUntilCompleted()
+        }
+    }
+}
+
+let ciContext = CIContext()
+var g_rotW = 0
+var g_rotH = 0
+var g_scale: CGFloat = 1
+var g_ox: CGFloat = 0
+var g_oy: CGFloat = 0
+
+func copyFrameToYoloBuffer(_ pixelBuffer: CVPixelBuffer) {
+    let outIdx = 374
+    guard let dstBuffer = buffers[outIdx] else { return }
+
+    let S = 640
+    let dstSize = S * S * 3
+    let dst = dstBuffer.contents().bindMemory(to: UInt8.self, capacity: dstSize)
+
+    memset(dst, 0, dstSize)
+
+    CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+    defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
+
+    guard let srcBase = CVPixelBufferGetBaseAddress(pixelBuffer) else { return }
+    let src = srcBase.assumingMemoryBound(to: UInt8.self)
+    let srcRowBytes = CVPixelBufferGetBytesPerRow(pixelBuffer)
+    let srcW = CVPixelBufferGetWidth(pixelBuffer)
+    let srcH = CVPixelBufferGetHeight(pixelBuffer)
+
+    // Back camera gives landscape buffers -> rotate to portrait.
+    let needsRotation = srcW > srcH
+    let rotW = needsRotation ? srcH : srcW
+    let rotH = needsRotation ? srcW : srcH
+
+    let scale = CGFloat(S) / CGFloat(max(rotW, rotH))
+    let newW = Int((CGFloat(rotW) * scale).rounded())
+    let newH = Int((CGFloat(rotH) * scale).rounded())
+    let ox = (S - newW) / 2
+    let oy = (S - newH) / 2
+
+    g_rotW = rotW
+    g_rotH = rotH
+    g_scale = scale
+    g_ox = CGFloat(ox)
+    g_oy = CGFloat(oy)
+
+    let dstRowBytes = S * 3
+    for y in 0..<newH {
+        let rotY = Int(CGFloat(y) / scale)
+        for x in 0..<newW {
+            let rotX = Int(CGFloat(x) / scale)
+
+            let sx: Int
+            let sy: Int
+            if needsRotation {
+                sx = rotY
+                sy = srcH - 1 - rotX
+            } else {
+                sx = rotX
+                sy = rotY
+            }
+
+            let p = src + sy * srcRowBytes + sx * 4
+            let q = dst + (oy + y) * dstRowBytes + (ox + x) * 3
+            q[0] = p[0]
+            q[1] = p[1]
+            q[2] = p[2]
         }
     }
 }
