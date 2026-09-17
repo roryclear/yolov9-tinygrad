@@ -448,17 +448,14 @@ func copyFrameToYoloBuffer(_ pixelBuffer: CVPixelBuffer) {
     let srcW = CVPixelBufferGetWidth(pixelBuffer)
     let srcH = CVPixelBufferGetHeight(pixelBuffer)
 
-    let rotW = srcH
-    let rotH = srcW
-
-    let scale = CGFloat(S) / CGFloat(max(rotW, rotH))
-    let newW = Int((CGFloat(rotW) * scale).rounded())
-    let newH = Int((CGFloat(rotH) * scale).rounded())
+    let scale = CGFloat(S) / CGFloat(max(srcH, srcW))
+    let newW = Int((CGFloat(srcH) * scale).rounded())
+    let newH = Int((CGFloat(srcW) * scale).rounded())
     let ox = (S - newW) / 2
     let oy = (S - newH) / 2
 
-    g_rotW = rotW
-    g_rotH = rotH
+    g_rotW = srcH
+    g_rotH = srcW
     g_scale = scale
     g_ox = CGFloat(ox)
     g_oy = CGFloat(oy)
