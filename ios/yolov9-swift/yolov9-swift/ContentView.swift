@@ -2,6 +2,89 @@ import SwiftUI
 import AVFoundation
 import CoreImage
 
+let yoloClasses: [(name: String, color: UIColor)] = [
+    ("person", .red),
+    ("bicycle", .green),
+    ("car", .blue),
+    ("motorcycle", .cyan),
+    ("airplane", .magenta),
+    ("bus", .yellow),
+    ("train", .orange),
+    ("truck", .purple),
+    ("boat", .brown),
+    ("traffic light", UIColor(red: 0.5, green: 0.7, blue: 0.2, alpha: 1.0)),
+    ("fire hydrant", UIColor(red: 0.8, green: 0.1, blue: 0.1, alpha: 1.0)),
+    ("stop sign", UIColor(red: 0.3, green: 0.3, blue: 0.8, alpha: 1.0)),
+    ("parking meter", UIColor(red: 0.7, green: 0.5, blue: 0.3, alpha: 1.0)),
+    ("bench", UIColor(red: 0.4, green: 0.4, blue: 0.2, alpha: 1.0)),
+    ("bird", UIColor(red: 0.1, green: 0.5, blue: 0.9, alpha: 1.0)),
+    ("cat", UIColor(red: 0.8, green: 0.2, blue: 0.6, alpha: 1.0)),
+    ("dog", UIColor(red: 0.9, green: 0.3, blue: 0.3, alpha: 1.0)),
+    ("horse", UIColor(red: 0.2, green: 0.6, blue: 0.7, alpha: 1.0)),
+    ("sheep", UIColor(red: 0.7, green: 0.3, blue: 0.5, alpha: 1.0)),
+    ("cow", UIColor(red: 0.4, green: 0.8, blue: 0.4, alpha: 1.0)),
+    ("elephant", UIColor(red: 0.3, green: 0.4, blue: 0.9, alpha: 1.0)),
+    ("bear", UIColor(red: 0.6, green: 0.2, blue: 0.8, alpha: 1.0)),
+    ("zebra", UIColor(red: 0.8, green: 0.5, blue: 0.2, alpha: 1.0)),
+    ("giraffe", UIColor(red: 0.5, green: 0.9, blue: 0.1, alpha: 1.0)),
+    ("backpack", UIColor(red: 0.3, green: 0.7, blue: 0.4, alpha: 1.0)),
+    ("umbrella", UIColor(red: 0.4, green: 0.6, blue: 0.9, alpha: 1.0)),
+    ("handbag", UIColor(red: 0.9, green: 0.2, blue: 0.5, alpha: 1.0)),
+    ("tie", UIColor(red: 0.5, green: 0.3, blue: 0.7, alpha: 1.0)),
+    ("suitcase", UIColor(red: 0.6, green: 0.7, blue: 0.2, alpha: 1.0)),
+    ("frisbee", UIColor(red: 0.7, green: 0.2, blue: 0.4, alpha: 1.0)),
+    ("skis", UIColor(red: 0.3, green: 0.9, blue: 0.3, alpha: 1.0)),
+    ("snowboard", UIColor(red: 0.8, green: 0.1, blue: 0.6, alpha: 1.0)),
+    ("sports ball", UIColor(red: 0.4, green: 0.3, blue: 0.8, alpha: 1.0)),
+    ("kite", UIColor(red: 0.2, green: 0.5, blue: 0.7, alpha: 1.0)),
+    ("baseball bat", UIColor(red: 0.6, green: 0.4, blue: 0.2, alpha: 1.0)),
+    ("baseball glove", UIColor(red: 0.7, green: 0.1, blue: 0.4, alpha: 1.0)),
+    ("skateboard", UIColor(red: 0.5, green: 0.8, blue: 0.5, alpha: 1.0)),
+    ("surfboard", UIColor(red: 0.8, green: 0.3, blue: 0.6, alpha: 1.0)),
+    ("tennis racket", UIColor(red: 0.2, green: 0.7, blue: 0.9, alpha: 1.0)),
+    ("bottle", UIColor(red: 0.9, green: 0.2, blue: 0.3, alpha: 1.0)),
+    ("wine glass", UIColor(red: 0.6, green: 0.6, blue: 0.3, alpha: 1.0)),
+    ("cup", UIColor(red: 0.3, green: 0.4, blue: 0.9, alpha: 1.0)),
+    ("fork", UIColor(red: 0.4, green: 0.7, blue: 0.2, alpha: 1.0)),
+    ("knife", UIColor(red: 0.8, green: 0.2, blue: 0.5, alpha: 1.0)),
+    ("spoon", UIColor(red: 0.6, green: 0.3, blue: 0.7, alpha: 1.0)),
+    ("bowl", UIColor(red: 0.2, green: 0.8, blue: 0.4, alpha: 1.0)),
+    ("banana", UIColor(red: 0.7, green: 0.7, blue: 0.1, alpha: 1.0)),
+    ("apple", UIColor(red: 0.9, green: 0.1, blue: 0.4, alpha: 1.0)),
+    ("sandwich", UIColor(red: 0.4, green: 0.5, blue: 0.8, alpha: 1.0)),
+    ("orange", UIColor(red: 0.8, green: 0.6, blue: 0.2, alpha: 1.0)),
+    ("broccoli", UIColor(red: 0.3, green: 0.8, blue: 0.3, alpha: 1.0)),
+    ("carrot", UIColor(red: 0.7, green: 0.2, blue: 0.6, alpha: 1.0)),
+    ("hot dog", UIColor(red: 0.9, green: 0.3, blue: 0.5, alpha: 1.0)),
+    ("pizza", UIColor(red: 0.5, green: 0.3, blue: 0.8, alpha: 1.0)),
+    ("donut", UIColor(red: 0.8, green: 0.1, blue: 0.4, alpha: 1.0)),
+    ("cake", UIColor(red: 0.7, green: 0.5, blue: 0.1, alpha: 1.0)),
+    ("chair", UIColor(red: 0.6, green: 0.2, blue: 0.4, alpha: 1.0)),
+    ("couch", UIColor(red: 0.4, green: 0.6, blue: 0.2, alpha: 1.0)),
+    ("potted plant", UIColor(red: 0.8, green: 0.4, blue: 0.5, alpha: 1.0)),
+    ("bed", UIColor(red: 0.3, green: 0.7, blue: 0.7, alpha: 1.0)),
+    ("dining table", UIColor(red: 0.5, green: 0.8, blue: 0.3, alpha: 1.0)),
+    ("toilet", UIColor(red: 0.7, green: 0.4, blue: 0.6, alpha: 1.0)),
+    ("tv", UIColor(red: 0.9, green: 0.5, blue: 0.2, alpha: 1.0)),
+    ("laptop", UIColor(red: 0.6, green: 0.3, blue: 0.7, alpha: 1.0)),
+    ("mouse", UIColor(red: 0.2, green: 0.9, blue: 0.5, alpha: 1.0)),
+    ("remote", UIColor(red: 0.8, green: 0.4, blue: 0.3, alpha: 1.0)),
+    ("keyboard", UIColor(red: 0.3, green: 0.6, blue: 0.8, alpha: 1.0)),
+    ("cell phone", UIColor(red: 0.7, green: 0.3, blue: 0.9, alpha: 1.0)),
+    ("microwave", UIColor(red: 0.4, green: 0.9, blue: 0.4, alpha: 1.0)),
+    ("oven", UIColor(red: 0.5, green: 0.7, blue: 0.2, alpha: 1.0)),
+    ("toaster", UIColor(red: 0.9, green: 0.2, blue: 0.3, alpha: 1.0)),
+    ("sink", UIColor(red: 0.6, green: 0.8, blue: 0.3, alpha: 1.0)),
+    ("refrigerator", UIColor(red: 0.8, green: 0.4, blue: 0.7, alpha: 1.0)),
+    ("book", UIColor(red: 0.3, green: 0.5, blue: 0.9, alpha: 1.0)),
+    ("clock", UIColor(red: 0.7, green: 0.7, blue: 0.2, alpha: 1.0)),
+    ("vase", UIColor(red: 0.9, green: 0.4, blue: 0.5, alpha: 1.0)),
+    ("scissors", UIColor(red: 0.2, green: 0.7, blue: 0.8, alpha: 1.0)),
+    ("teddy bear", UIColor(red: 0.6, green: 0.3, blue: 0.9, alpha: 1.0)),
+    ("hair drier", UIColor(red: 0.8, green: 0.2, blue: 0.3, alpha: 1.0)),
+    ("toothbrush", UIColor(red: 0.4, green: 0.7, blue: 0.6, alpha: 1.0))
+]
+
 let device = MTLCreateSystemDefaultDevice()!
 let queue = device.makeCommandQueue()!
 var buffers: [Int: MTLBuffer] = [:]
@@ -134,6 +217,8 @@ func drawBoxes(_ dets: [[Float]]) {
         videoY = (H - videoH) / 2
     }
 
+    let font = UIFont.boldSystemFont(ofSize: 11)
+
     for d in dets {
         let x1 = videoX + ((CGFloat(d[0]) - g_ox) / g_scale / CGFloat(g_rotW)) * videoW
         let y1 = videoY + ((CGFloat(d[1]) - g_oy) / g_scale / CGFloat(g_rotH)) * videoH
@@ -143,19 +228,41 @@ func drawBoxes(_ dets: [[Float]]) {
         let rect = CGRect(x: min(x1, x2), y: min(y1, y2),
                           width: abs(x2 - x1), height: abs(y2 - y1))
 
+        let classIdx = Int(d[5])
+        let name: String
+        let color: UIColor
+        if classIdx >= 0 && classIdx < yoloClasses.count {
+            name = yoloClasses[classIdx].name
+            color = yoloClasses[classIdx].color
+        } else {
+            name = "\(classIdx)"
+            color = .green
+        }
+
+        // Box
         let shape = CAShapeLayer()
         shape.name = "rect"
         shape.path = UIBezierPath(rect: rect).cgPath
-        shape.strokeColor = UIColor.green.cgColor
+        shape.strokeColor = color.cgColor
         shape.fillColor = UIColor.clear.cgColor
         shape.lineWidth = 2
         view.layer.addSublayer(shape)
 
-        let label = UILabel(frame: CGRect(x: rect.minX, y: max(rect.minY - 16, 0), width: 90, height: 16))
-        label.text = "\(Int(d[5])): \(Int((d[4] * 100).rounded()))%"
-        label.font = .boldSystemFont(ofSize: 12)
+        // YOLO-style label: "name 87%" tight tag at top-left
+        let text = "\(name) \(Int((d[4] * 100).rounded()))%"
+        let padX: CGFloat = 4
+        let textW = (text as NSString).size(withAttributes: [.font: font]).width
+        let labelW = ceil(textW + padX * 2)
+        let labelH: CGFloat = 14
+        let labelY = max(rect.minY - labelH, 0)
+
+        let label = UILabel(frame: CGRect(x: rect.minX, y: labelY,
+                                          width: labelW, height: labelH))
+        label.text = text
+        label.font = font
         label.textColor = .white
-        label.backgroundColor = .green
+        label.backgroundColor = color
+        label.textAlignment = .left
         view.addSubview(label)
     }
 }
