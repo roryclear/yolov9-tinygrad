@@ -38,8 +38,6 @@ final class Camera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
 
     private func setup() {
         yolo_graph = GraphRunner(filename: "graph_0.rc")
-        print(yolo_graph.copyins)
-        yolo_graph.run() // test
         
         guard session.inputs.isEmpty,
               let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
@@ -61,6 +59,16 @@ final class Camera: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
 
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         // frames arrive here
+        print(yolo_graph.copyins)
+        print(yolo_graph.copyouts)
+        print(buffer_sz[yolo_graph.copyouts[0]])
+        yolo_graph.run() // test
+        
+        let out = yolo_graph.copyouts[0]
+        let rows = buffer_sz[out]! / 6
+        let dets = buffers[out]!.contents().bindMemory(to: Float.self, capacity: buffer_sz[out]!)
+        let shaped = (0..<rows).map { Array(UnsafeBufferPointer(start: dets + $0*6, count: 6)) }.filter { $0[4] >= 0.25 } // 25% hardcoded!
+        print(shaped)
     }
 }
 
