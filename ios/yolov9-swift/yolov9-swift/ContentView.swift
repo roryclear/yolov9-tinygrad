@@ -473,13 +473,8 @@ func copyFrameToYoloBuffer(_ pixelBuffer: CVPixelBuffer) {
 
             let sx: Int
             let sy: Int
-            if needsRotation {
-                sx = rotY
-                sy = srcH - 1 - rotX
-            } else {
-                sx = rotX
-                sy = rotY
-            }
+            sx = rotY
+            sy = srcH - 1 - rotX
 
             let p = src + sy * srcRowBytes + sx * 4
             let q = dst + (oy + y) * dstRowBytes + (ox + x) * 3
