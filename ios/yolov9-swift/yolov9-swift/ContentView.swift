@@ -448,10 +448,8 @@ func copyFrameToYoloBuffer(_ pixelBuffer: CVPixelBuffer) {
     let srcW = CVPixelBufferGetWidth(pixelBuffer)
     let srcH = CVPixelBufferGetHeight(pixelBuffer)
 
-    // Back camera gives landscape buffers -> rotate to portrait.
-    let needsRotation = srcW > srcH
-    let rotW = needsRotation ? srcH : srcW
-    let rotH = needsRotation ? srcW : srcH
+    let rotW = srcH
+    let rotH = srcW
 
     let scale = CGFloat(S) / CGFloat(max(rotW, rotH))
     let newW = Int((CGFloat(rotW) * scale).rounded())
@@ -470,13 +468,7 @@ func copyFrameToYoloBuffer(_ pixelBuffer: CVPixelBuffer) {
         let rotY = Int(CGFloat(y) / scale)
         for x in 0..<newW {
             let rotX = Int(CGFloat(x) / scale)
-
-            let sx: Int
-            let sy: Int
-            sx = rotY
-            sy = srcH - 1 - rotX
-
-            let p = src + sy * srcRowBytes + sx * 4
+            let p = src + (srcH - 1 - rotX) * srcRowBytes + rotY * 4
             let q = dst + (oy + y) * dstRowBytes + (ox + x) * 3
             q[0] = p[0]
             q[1] = p[1]
