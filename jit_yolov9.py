@@ -20,7 +20,7 @@ if __name__ == "__main__":
 
   model = YOLOv9(size, res=res)
 
-  im = Tensor(np.random.rand(res, res, 3).astype(np.float32))
+  im = Tensor((np.random.rand(res, res, 3) * 255).astype(np.uint8))
   # capture JIT + BEAM
   non_jit_out = None
   for _ in range(3):
